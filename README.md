@@ -1467,6 +1467,1288 @@ docker rmi <image-name>
 ```
 
 ---
+# 🎯 50 Real-World Docker Interview Questions
+
+> **Comprehensive collection of scenario-based Docker interview questions asked by top companies**
+
+---
+
+## 📋 Table of Contents
+- [Beginner Level (1-15)](#beginner-level-questions-1-15)
+- [Intermediate Level (16-35)](#intermediate-level-questions-16-35)
+- [Advanced Level (36-50)](#advanced-level-questions-36-50)
+
+---
+
+## Beginner Level Questions (1-15)
+
+### 1. Your application works on your laptop but fails in production. How does Docker solve this problem?
+
+**Scenario:** You developed a Node.js application on your Windows laptop. It works perfectly. But when the DevOps team deploys it on a Linux server, it crashes with "module not found" errors.
+
+**Answer:** 
+Docker packages the application with all its dependencies (Node.js runtime, libraries, OS-level dependencies) into a container. This container runs identically on any environment - laptop, staging, or production. The container includes:
+- Exact Node.js version
+- All npm packages
+- OS libraries
+- Environment configuration
+
+This eliminates the "it works on my machine" problem.
+
+---
+
+### 2. A container stopped unexpectedly in production. How do you troubleshoot it?
+
+**Scenario:** Your production API container stopped at 3 AM. Users are complaining. What's your first step?
+
+**Answer:**
+```bash
+# Step 1: Check if container is running
+docker ps -a
+
+# Step 2: Check the logs to see why it stopped
+docker logs <container-name>
+
+# Step 3: Check the exit code
+docker inspect <container-name> --format='{{.State.ExitCode}}'
+# Exit code 0 = normal, 1 = error, 137 = killed by SIGKILL
+
+# Step 4: Try to restart
+docker start <container-name>
+
+# Step 5: If persistent issue, check resource usage
+docker stats
+```
+
+Common causes: Out of memory, application crash, dependency failure, health check failure.
+
+---
+
+### 3. How do you limit a container to use only 512MB RAM and 1 CPU core?
+
+**Scenario:** Your Java application container is consuming too much memory and affecting other services on the same host.
+
+**Answer:**
+```bash
+docker run -d \
+  --name my-java-app \
+  --memory="512m" \
+  --memory-swap="512m" \
+  --cpus="1.0" \
+  my-java-app:latest
+```
+
+To update running container:
+```bash
+docker update --memory="512m" --cpus="1.0" my-java-app
+```
+
+Monitor:
+```bash
+docker stats my-java-app
+```
+
+---
+
+### 4. Your Docker image is 2GB in size. How do you reduce it?
+
+**Scenario:** Building and deploying takes too long because your Python application image is huge.
+
+**Answer:**
+
+**Before (Bad):**
+```dockerfile
+FROM ubuntu:22.04
+RUN apt-get update
+RUN apt-get install -y python3 python3-pip
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
+COPY . /app
+```
+
+**After (Good):**
+```dockerfile
+# Use Alpine (smaller base)
+FROM python:3.11-alpine
+
+# Install dependencies in one layer
+RUN apk add --no-cache gcc musl-dev
+
+WORKDIR /app
+
+# Copy only requirements first (layer caching)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Remove unnecessary files
+RUN rm -rf /var/cache/apk/*
+
+CMD ["python", "app.py"]
+```
+
+Additional tips:
+- Use `.dockerignore` file
+- Multi-stage builds
+- Don't install dev dependencies in production
+
+---
+
+### 5. Container data is lost when you restart it. How do you persist data?
+
+**Scenario:** Your MySQL container stores data. When you restart it, all data is gone.
+
+**Answer:**
+```bash
+# Create a named volume
+docker volume create mysql-data
+
+# Run container with volume
+docker run -d \
+  --name mysql-db \
+  -e MYSQL_ROOT_PASSWORD=secret \
+  -v mysql-data:/var/lib/mysql \
+  mysql:8.0
+
+# Even after removing container, data persists
+docker rm -f mysql-db
+
+# Start new container with same volume
+docker run -d \
+  --name mysql-db-new \
+  -e MYSQL_ROOT_PASSWORD=secret \
+  -v mysql-data:/var/lib/mysql \
+  mysql:8.0
+# All data is still there!
+```
+
+---
+
+### 6. How do you run a container that automatically restarts if it crashes?
+
+**Scenario:** Your monitoring service container occasionally crashes due to memory spikes. You want it to restart automatically.
+
+**Answer:**
+```bash
+docker run -d \
+  --name monitoring-service \
+  --restart=unless-stopped \
+  monitoring:latest
+
+# Options:
+# --restart=no              # Don't restart (default)
+# --restart=on-failure      # Restart only if error
+# --restart=on-failure:5    # Max 5 restart attempts
+# --restart=always          # Always restart (even after reboot)
+# --restart=unless-stopped  # Restart unless manually stopped
+```
+
+Update existing container:
+```bash
+docker update --restart=unless-stopped monitoring-service
+```
+
+---
+
+### 7. You need to access a shell inside a running container. How?
+
+**Scenario:** Your Node.js application is behaving strangely. You need to check files and run commands inside the container.
+
+**Answer:**
+```bash
+# For containers with bash
+docker exec -it my-nodejs-app bash
+
+# For Alpine containers (no bash)
+docker exec -it my-nodejs-app sh
+
+# Run specific command
+docker exec my-nodejs-app ls -la /app
+
+# Run as root user (for debugging)
+docker exec -u root -it my-nodejs-app bash
+
+# Check environment variables
+docker exec my-nodejs-app env
+```
+
+---
+
+### 8. How do you copy files from your host to a running container?
+
+**Scenario:** You need to update a configuration file in a running production container without restarting it.
+
+**Answer:**
+```bash
+# Copy file TO container
+docker cp config.json my-container:/app/config.json
+
+# Copy file FROM container
+docker cp my-container:/app/logs/error.log ./local-error.log
+
+# Copy entire directory
+docker cp ./configs my-container:/etc/app/
+```
+
+**Note:** This is for emergency fixes. Proper way is to rebuild the image.
+
+---
+
+### 9. Your application needs to connect to a database. How do you pass the database password securely?
+
+**Scenario:** Your app needs credentials. Hardcoding in Dockerfile is insecure.
+
+**Answer:**
+```bash
+# Method 1: Environment variables (simple)
+docker run -d \
+  --name my-app \
+  -e DB_HOST=mysql \
+  -e DB_USER=admin \
+  -e DB_PASSWORD=secret123 \
+  my-app:latest
+
+# Method 2: Environment file
+# Create .env file:
+# DB_HOST=mysql
+# DB_USER=admin
+# DB_PASSWORD=secret123
+
+docker run -d \
+  --name my-app \
+  --env-file .env \
+  my-app:latest
+
+# Method 3: Docker secrets (Swarm mode - most secure)
+echo "secret123" | docker secret create db_password -
+
+docker service create \
+  --name my-app \
+  --secret db_password \
+  my-app:latest
+```
+
+**Never** put passwords in Dockerfile!
+
+---
+
+### 10. How do you view real-time logs from a running container?
+
+**Scenario:** Your API is throwing errors and you need to monitor logs in real-time.
+
+**Answer:**
+```bash
+# Follow logs (like tail -f)
+docker logs -f my-api
+
+# Last 100 lines + follow
+docker logs -f --tail 100 my-api
+
+# Show timestamps
+docker logs -f -t my-api
+
+# Logs from last 10 minutes
+docker logs --since 10m my-api
+
+# Logs from specific time
+docker logs --since 2024-01-11T10:00:00 my-api
+```
+
+---
+
+### 11. Multiple containers need to communicate. How do you set this up?
+
+**Scenario:** Your web app (container 1) needs to connect to Redis (container 2) and PostgreSQL (container 3).
+
+**Answer:**
+```bash
+# Create custom network
+docker network create my-app-network
+
+# Run database
+docker run -d \
+  --name postgres-db \
+  --network my-app-network \
+  -e POSTGRES_PASSWORD=secret \
+  postgres:15
+
+# Run Redis
+docker run -d \
+  --name redis-cache \
+  --network my-app-network \
+  redis:7-alpine
+
+# Run application
+docker run -d \
+  --name web-app \
+  --network my-app-network \
+  -p 8080:8080 \
+  my-web-app:latest
+
+# Inside web-app container, connect to:
+# - postgres-db:5432
+# - redis-cache:6379
+```
+
+Containers can reach each other by **container name** as hostname.
+
+---
+
+### 12. How do you remove all stopped containers to free up space?
+
+**Scenario:** Your server has 50+ stopped containers consuming disk space.
+
+**Answer:**
+```bash
+# Remove all stopped containers
+docker container prune
+
+# With confirmation
+docker container prune -f
+
+# Remove containers stopped for more than 24 hours
+docker container prune --filter "until=24h"
+
+# Nuclear option: Remove ALL containers (running + stopped)
+docker rm -f $(docker ps -aq)
+
+# Check disk space
+docker system df
+```
+
+---
+
+### 13. You built an image but forgot to tag it. How do you tag it now?
+
+**Scenario:** You ran `docker build .` and got an image with ID abc123. You need to tag it.
+
+**Answer:**
+```bash
+# Tag by image ID
+docker tag abc123 my-app:v1.0
+
+# Tag with registry
+docker tag abc123 myregistry.com/my-app:v1.0
+
+# Create multiple tags
+docker tag abc123 my-app:v1.0
+docker tag abc123 my-app:latest
+docker tag abc123 my-app:production
+
+# View all tags
+docker images my-app
+```
+
+---
+
+### 14. How do you expose a container's port to the host machine?
+
+**Scenario:** Your nginx container runs on port 80 inside container. You want to access it on port 8080 from your browser.
+
+**Answer:**
+```bash
+# Map port 8080 (host) to 80 (container)
+docker run -d -p 8080:80 nginx
+
+# Map to all interfaces
+docker run -d -p 0.0.0.0:8080:80 nginx
+
+# Map to specific interface
+docker run -d -p 127.0.0.1:8080:80 nginx
+
+# Random port on host
+docker run -d -P nginx  # Docker assigns random port
+
+# Multiple ports
+docker run -d \
+  -p 8080:80 \
+  -p 8443:443 \
+  nginx
+
+# Check which ports are mapped
+docker port <container-name>
+```
+
+---
+
+### 15. How do you check which version of Docker is installed?
+
+**Scenario:** Before running commands, you need to verify Docker version for compatibility.
+
+**Answer:**
+```bash
+# Short version
+docker --version
+# Output: Docker version 24.0.6
+
+# Detailed version info
+docker version
+
+# System-wide info
+docker info
+```
+
+---
+
+## Intermediate Level Questions (16-35)
+
+### 16. Your application needs different configurations for dev, staging, and production. How do you handle this with Docker?
+
+**Scenario:** Same application, different database URLs, API keys, and debug settings per environment.
+
+**Answer:**
+
+**Dockerfile:**
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+**Run with environment-specific configs:**
+```bash
+# Development
+docker run -d \
+  --name app-dev \
+  -e NODE_ENV=development \
+  -e DB_URL=postgres://dev-db:5432/myapp \
+  -e DEBUG=true \
+  -p 3000:3000 \
+  my-app:latest
+
+# Staging
+docker run -d \
+  --name app-staging \
+  -e NODE_ENV=staging \
+  -e DB_URL=postgres://staging-db:5432/myapp \
+  -e DEBUG=false \
+  -p 3001:3000 \
+  my-app:latest
+
+# Production
+docker run -d \
+  --name app-prod \
+  -e NODE_ENV=production \
+  -e DB_URL=postgres://prod-db:5432/myapp \
+  -e DEBUG=false \
+  --restart=unless-stopped \
+  -p 80:3000 \
+  my-app:latest
+```
+
+Or use config files:
+```bash
+docker run -d --env-file .env.production my-app:latest
+```
+
+---
+
+### 17. A container is using 100% CPU and slowing down the host. How do you identify and fix it?
+
+**Scenario:** Server is slow. Multiple containers are running. Need to find the culprit.
+
+**Answer:**
+```bash
+# Step 1: Check all containers' resource usage
+docker stats
+
+# Step 2: Identify the problematic container (100% CPU)
+# Let's say it's "api-service"
+
+# Step 3: Check what's running inside
+docker top api-service
+
+# Step 4: Limit CPU usage
+docker update --cpus="1.0" api-service
+
+# Step 5: Check logs for issues
+docker logs --tail 100 api-service
+
+# Step 6: If it's a code issue, restart with limits
+docker stop api-service
+docker run -d \
+  --name api-service \
+  --cpus="1.5" \
+  --memory="1g" \
+  api-service:latest
+
+# Monitor again
+docker stats api-service
+```
+
+---
+
+### 18. How do you create a Dockerfile for a multi-stage build to reduce image size?
+
+**Scenario:** Your React app with Node.js build tools creates a 1.5GB image. You only need the built files.
+
+**Answer:**
+```dockerfile
+# Stage 1: Build stage
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+# At this point, /app/build has production files
+
+# Stage 2: Production stage
+FROM nginx:alpine
+# Copy only built files from builder stage
+COPY --from=builder /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**Result:** 
+- Builder stage: 1.5GB (not in final image)
+- Final image: 25MB (only nginx + built files)
+
+**Another example (Go application):**
+```dockerfile
+# Build stage
+FROM golang:1.21-alpine AS builder
+WORKDIR /app
+COPY . .
+RUN go build -o main .
+
+# Production stage
+FROM alpine:latest
+COPY --from=builder /app/main /main
+CMD ["/main"]
+```
+
+---
+
+### 19. How do you debug a container that exits immediately after starting?
+
+**Scenario:** You run `docker run my-app` and it exits instantly. `docker logs` shows nothing.
+
+**Answer:**
+```bash
+# Step 1: Check exit code
+docker inspect <container-name> --format='{{.State.ExitCode}}'
+
+# Step 2: Try running with shell override
+docker run -it --entrypoint sh my-app
+
+# Step 3: Check if CMD/ENTRYPOINT is correct
+docker inspect my-app --format='{{.Config.Cmd}}'
+docker inspect my-app --format='{{.Config.Entrypoint}}'
+
+# Step 4: Run in foreground to see errors
+docker run --rm my-app
+
+# Step 5: Keep container alive for debugging
+docker run -d --entrypoint tail my-app -f /dev/null
+docker exec -it <container> sh
+```
+
+**Common causes:**
+- No foreground process (container needs a process that doesn't exit)
+- Wrong CMD/ENTRYPOINT
+- Application crash on startup
+- Missing dependencies
+
+---
+
+### 20. How do you update a running container without downtime?
+
+**Scenario:** You have a production web service. New version is ready. Need zero downtime deployment.
+
+**Answer:**
+
+**Strategy: Blue-Green Deployment**
+```bash
+# Current version (blue) running on port 80
+docker run -d --name web-blue -p 80:8080 my-app:v1.0
+
+# Start new version (green) on different port
+docker run -d --name web-green -p 8080:8080 my-app:v2.0
+
+# Test new version
+curl http://localhost:8080/health
+
+# Switch traffic (update load balancer or nginx)
+# If using nginx, update upstream, reload nginx
+
+# Once verified, stop old version
+docker stop web-blue
+docker rm web-blue
+
+# Rename new version
+docker rename web-green web-blue
+```
+
+**Better approach: Use Docker Compose or Kubernetes for rolling updates**
+
+---
+
+### 21. Your Dockerfile uses COPY but some files shouldn't be included. How do you exclude them?
+
+**Scenario:** Your project has `node_modules`, `.git`, test files that shouldn't be in the image.
+
+**Answer:**
+
+**Create `.dockerignore` file:**
+```
+# .dockerignore
+node_modules
+npm-debug.log
+.git
+.gitignore
+README.md
+.env
+.env.local
+*.test.js
+coverage/
+.vscode/
+.idea/
+*.log
+dist/
+build/
+```
+
+**Dockerfile:**
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .  # Only copies files NOT in .dockerignore
+CMD ["node", "server.js"]
+```
+
+**Benefits:**
+- Smaller image size
+- Faster builds
+- No sensitive files in image
+- No unnecessary files
+
+---
+
+### 22. How do you run multiple containers with a single command?
+
+**Scenario:** Your app needs web server, database, and cache. You want to start all together.
+
+**Answer:**
+
+**Create `docker-compose.yml`:**
+```yaml
+version: '3.8'
+
+services:
+  web:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    networks:
+      - app-network
+
+  api:
+    build: .
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db-data:
+```
+
+**Commands:**
+```bash
+# Start all services
+docker-compose up -d
+
+# View status
+docker-compose ps
+
+# View logs
+docker-compose logs -f
+
+# Stop all
+docker-compose down
+
+# Stop and remove volumes
+docker-compose down -v
+```
+
+---
+
+### 23. How do you secure a container by running it as a non-root user?
+
+**Scenario:** Security team requires all containers to run as non-root users.
+
+**Answer:**
+```dockerfile
+FROM node:18-alpine
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 -G nodejs
+
+# Create app directory with correct permissions
+WORKDIR /app
+RUN chown -R nodejs:nodejs /app
+
+# Copy files as root
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+
+# Switch to non-root user
+USER nodejs
+
+# Now everything runs as nodejs user
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+**Verify:**
+```bash
+docker exec <container> whoami
+# Output: nodejs (not root)
+
+docker exec <container> id
+# Output: uid=1001(nodejs) gid=1001(nodejs)
+```
+
+---
+
+### 24. Container logs are filling up disk space. How do you limit log size?
+
+**Scenario:** Docker logs have consumed 50GB of disk space.
+
+**Answer:**
+
+**Method 1: Configure daemon globally**
+
+Edit `/etc/docker/daemon.json`:
+```json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+```
+
+Restart Docker:
+```bash
+sudo systemctl restart docker
+```
+
+**Method 2: Per container**
+```bash
+docker run -d \
+  --name my-app \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  my-app:latest
+```
+
+**Method 3: Use different log driver**
+```bash
+docker run -d \
+  --name my-app \
+  --log-driver=syslog \
+  my-app:latest
+```
+
+**Clean existing logs:**
+```bash
+# Truncate logs of running container
+truncate -s 0 $(docker inspect --format='{{.LogPath}}' <container>)
+
+# Or use script
+echo "" > $(docker inspect --format='{{.LogPath}}' <container>)
+```
+
+---
+
+### 25. How do you share data between multiple containers?
+
+**Scenario:** Container A generates reports, Container B serves them via web interface.
+
+**Answer:**
+```bash
+# Create shared volume
+docker volume create shared-data
+
+# Container A: Generates reports
+docker run -d \
+  --name report-generator \
+  -v shared-data:/reports \
+  report-generator:latest
+
+# Container B: Serves reports
+docker run -d \
+  --name report-viewer \
+  -v shared-data:/usr/share/nginx/html:ro \
+  -p 80:80 \
+  nginx:alpine
+
+# Both containers access same data
+# Container A writes to /reports
+# Container B reads from /usr/share/nginx/html
+```
+
+**Alternative: Mount same host directory:**
+```bash
+mkdir -p /opt/shared-reports
+
+docker run -d \
+  --name report-generator \
+  -v /opt/shared-reports:/reports \
+  report-generator:latest
+
+docker run -d \
+  --name report-viewer \
+  -v /opt/shared-reports:/usr/share/nginx/html:ro \
+  -p 80:80 \
+  nginx:alpine
+```
+
+---
+
+### 26. How do you monitor container health and automatically restart unhealthy containers?
+
+**Scenario:** Your API sometimes hangs. You want Docker to detect and restart it automatically.
+
+**Answer:**
+
+**In Dockerfile:**
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY . .
+RUN npm ci --only=production
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD node healthcheck.js || exit 1
+
+CMD ["node", "server.js"]
+```
+
+**healthcheck.js:**
+```javascript
+const http = require('http');
+const options = {
+  host: 'localhost',
+  port: 3000,
+  path: '/health',
+  timeout: 2000
+};
+
+http.get(options, (res) => {
+  if (res.statusCode === 200) {
+    process.exit(0);
+  } else {
+    process.exit(1);
+  }
+}).on('error', () => {
+  process.exit(1);
+});
+```
+
+**Run with restart policy:**
+```bash
+docker run -d \
+  --name api-service \
+  --restart=on-failure:3 \
+  api-service:latest
+```
+
+**Check health status:**
+```bash
+docker ps  # Shows (healthy) or (unhealthy)
+docker inspect api-service --format='{{.State.Health.Status}}'
+```
+
+---
+
+### 27. How do you pass build-time variables to Docker build?
+
+**Scenario:** You want to build images for different environments with different versions.
+
+**Answer:**
+```dockerfile
+# Dockerfile
+ARG NODE_VERSION=18
+ARG BUILD_DATE
+ARG VERSION
+
+FROM node:${NODE_VERSION}-alpine
+
+LABEL build_date=${BUILD_DATE}
+LABEL version=${VERSION}
+
+WORKDIR /app
+COPY . .
+
+RUN echo "Building version ${VERSION} on ${BUILD_DATE}"
+
+CMD ["node", "server.js"]
+```
+
+**Build with arguments:**
+```bash
+# Default values
+docker build -t my-app:latest .
+
+# Custom values
+docker build \
+  --build-arg NODE_VERSION=20 \
+  --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+  --build-arg VERSION=2.0.1 \
+  -t my-app:2.0.1 .
+```
+
+**View build args in image:**
+```bash
+docker inspect my-app:2.0.1 --format='{{.Config.Labels}}'
+```
+
+---
+
+### 28. Your container needs to access the host's network services. How?
+
+**Scenario:** Container needs to connect to a database running on the host machine (localhost).
+
+**Answer:**
+
+**Method 1: Host network mode**
+```bash
+docker run -d \
+  --name my-app \
+  --network host \
+  my-app:latest
+
+# Container can access host's localhost directly
+# No port mapping needed
+```
+
+**Method 2: Special DNS name (Mac/Windows Docker Desktop)**
+```bash
+docker run -d \
+  --name my-app \
+  -e DB_HOST=host.docker.internal \
+  my-app:latest
+
+# Inside container, connect to: host.docker.internal:5432
+```
+
+**Method 3: Host IP (Linux)**
+```bash
+# Find host IP on docker bridge
+ip addr show docker0
+
+docker run -d \
+  --name my-app \
+  -e DB_HOST=172.17.0.1 \
+  my-app:latest
+```
+
+---
+
+### 29. How do you backup and restore Docker volumes?
+
+**Scenario:** You need to backup production database volume before upgrade.
+
+**Answer:**
+
+**Backup volume:**
+```bash
+# Create backup directory
+mkdir -p /backup
+
+# Backup volume to tar file
+docker run --rm \
+  -v postgres-data:/data \
+  -v /backup:/backup \
+  alpine \
+  tar czf /backup/postgres-backup-$(date +%Y%m%d).tar.gz -C /data .
+
+# Or using existing container
+docker run --rm \
+  --volumes-from postgres-db \
+  -v /backup:/backup \
+  alpine \
+  tar czf /backup/postgres-backup.tar.gz -C /var/lib/postgresql/data .
+```
+
+**Restore volume:**
+```bash
+# Create new volume
+docker volume create postgres-data-restored
+
+# Restore from backup
+docker run --rm \
+  -v postgres-data-restored:/data \
+  -v /backup:/backup \
+  alpine \
+  tar xzf /backup/postgres-backup-20240111.tar.gz -C /data
+
+# Use restored volume
+docker run -d \
+  --name postgres-restored \
+  -v postgres-data-restored:/var/lib/postgresql/data \
+  postgres:15
+```
+
+---
+
+### 30. How do you find and remove unused Docker resources (images, containers, volumes)?
+
+**Scenario:** Server disk is 95% full. Need to clean up Docker resources.
+
+**Answer:**
+```bash
+# Check disk usage
+docker system df
+docker system df -v  # Detailed
+
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune  # Dangling images only
+docker image prune -a  # All unused images
+
+# Remove unused volumes
+docker volume prune
+
+# Remove unused networks
+docker network prune
+
+# Remove everything unused (CAREFUL!)
+docker system prune
+
+# Aggressive cleanup (removes all unused resources)
+docker system prune -a --volumes
+
+# With time filter (remove resources older than 24h)
+docker system prune --filter "until=24h"
+
+# Check space saved
+docker system df
+```
+
+---
+
+### 31. How do you inspect network configuration of a running container?
+
+**Scenario:** Container can't connect to another service. Need to debug networking.
+
+**Answer:**
+```bash
+# View all networks
+docker network ls
+
+# Inspect specific network
+docker network inspect bridge
+
+# View container's network config
+docker inspect my-container --format='{{.NetworkSettings.Networks}}'
+
+# Get IP address
+docker inspect my-container --format='{{.NetworkSettings.IPAddress}}'
+
+# Get all network details
+docker inspect my-container | jq '.[0].NetworkSettings'
+
+# Test connectivity from container
+docker exec my-container ping other-container
+docker exec my-container curl http://other-container:8080
+
+# Check DNS resolution
+docker exec my-container nslookup other-container
+
+# View port mappings
+docker port my-container
+```
+
+---
+
+### 32. How do you build an image without using cache?
+
+**Scenario:** Previous build had errors. You want a completely fresh build.
+
+**Answer:**
+```bash
+# Build without cache
+docker build --no-cache -t my-app:latest .
+
+# Pull latest base image and build without cache
+docker build --pull --no-cache -t my-app:latest .
+
+# Remove specific image and rebuild
+docker rmi my-app:latest
+docker build -t my-app:latest .
+```
+
+**When to use:**
+- Debugging build issues
+- Base image was updated
+- Want fresh package installations
+- Previous build had errors
+
+---
+
+### 33. Container needs to run a task at startup before the main application. How?
+
+**Scenario:** Database needs migrations before starting, or need to wait for another service.
+
+**Answer:**
+
+**Method 1: Custom entrypoint script**
+
+**entrypoint.sh:**
+```bash
+#!/bin/sh
+set -e
+
+# Wait for database
+echo "Waiting for database..."
+while ! nc -z postgres 5432; do
+  sleep 1
+done
+echo "Database is ready!"
+
+# Run migrations
+echo "Running migrations..."
+npm run migrate
+
+# Start main application
+echo "Starting application..."
+exec "$@"
+```
+
+**Dockerfile:**
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install netcat for waiting
+RUN apk add --no-cache netcat-openbsd
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+COPY . .
+RUN npm ci --only=production
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["node", "server.js"]
+```
+
+**Method 2: Using init container pattern (Docker Compose)**
+```yaml
+version: '3.8'
+services:
+  init:
+    image: my-app:latest
+    command: npm run migrate
+    depends_on:
+      - postgres
+  
+  app:
+    image: my-app:latest
+    depends_on:
+      init:
+        condition: service_completed_successfully
+```
+
+---
+
+### 34. How do you copy running container to create a new image?
+
+**Scenario:** You made manual changes in a container for testing. Want to save them as a new image.
+
+**Answer:**
+```bash
+# Make changes in running container
+docker exec -it my-container bash
+# ... make changes ...
+# exit
+
+# Commit changes to new image
+docker commit my-container my-new-image:v1.0
+
+# With metadata
+docker commit \
+  --author "John Doe <john@example.com>" \
+  --message "Added custom configuration" \
+  my-container \
+  my-new-image:v1.0
+
+# Verify new image
+docker images my-new-image
+
+# Run new image
+docker run -d my-new-image:v1.0
+```
+
+**Note:** This is for testing only. For production, update Dockerfile and rebuild properly.
+
+---
+
+### 35. How do you limit network bandwidth for a container?
+
+**Scenario:** A container is consuming too much network bandwidth, affecting other services.
+
+**Answer:**
+```bash
+# Linux only - requires tc (traffic control)
+
+# Create container
+docker run -d --name bandwidth-limited my-app
+
+# Limit to 1 Mbps
+docker exec bandwidth-limited tc qdisc add dev eth0 root tbf rate 1mbit burst 32kbit latency 400ms
+
+# Or use docker run with network settings (if supported)
+docker run -d \
+  --name bandwidth-limited \
+  --network custom-network \
+  --network-alias my-
+---
 
 ## 🎓 Certification & Career Path
 

@@ -1151,4 +1151,354 @@ ENV APP_HOME=/app
 WORKDIR $APP_HOME
 
 # Override at runtime:
-# docker run -e NODE_ENV=development
+# docker run -e NODE_ENV=development myimage
+```
+
+---
+
+#### 7️⃣ ARG - Build Arguments
+
+```dockerfile
+# Available only during build time
+ARG VERSION=1.0
+ARG NODE_VERSION=18
+
+# Use in FROM
+ARG NODE_VERSION=18
+FROM node:${NODE_VERSION}
+
+# Use in RUN
+ARG BUILD_DATE
+RUN echo "Built on ${BUILD_DATE}"
+
+# Provide at build time:
+# docker build --build-arg NODE_VERSION=20 .
+
+# ARG vs ENV:
+# ARG: Build time only
+# ENV: Build time + runtime
+```
+
+---
+
+#### 8️⃣ WORKDIR - Working Directory
+
+```dockerfile
+# Set working directory (creates if not exists)
+WORKDIR /app
+
+# All subsequent commands run from here
+COPY . .
+RUN npm install
+
+# Use variables
+ENV APP_DIR=/application
+WORKDIR $APP_DIR
+
+# Multiple WORKDIR (relative paths)
+WORKDIR /app
+WORKDIR subdir  # Now at /app/subdir
+```
+
+---
+
+#### 9️⃣ EXPOSE - Document Ports
+
+```dockerfile
+# Document which ports the container listens on
+EXPOSE 80
+EXPOSE 443
+EXPOSE 8080/tcp
+EXPOSE 8081/udp
+
+# Multiple ports
+EXPOSE 80 443 8080
+
+# NOTE: EXPOSE doesn't publish ports!
+# It's documentation only
+# Still need: docker run -p 80:80 myimage
+```
+
+---
+
+#### 🔟 USER - Switch User
+
+```dockerfile
+# Switch to user (security best practice)
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+# Everything after runs as appuser
+RUN whoami  # Outputs: appuser
+
+# Switch back to root
+USER root
+RUN apt-get update
+USER appuser
+
+# With UID:GID
+USER 1000:1000
+```
+
+---
+
+#### 1️⃣1️⃣ VOLUME - Declare Volumes
+
+```dockerfile
+# Declare volumes (creates mount point)
+VOLUME /data
+
+# Multiple volumes
+VOLUME /data /logs
+
+# NOTE: Better to define volumes at runtime
+# docker run -v mydata:/data myimage
+```
+
+---
+
+#### 1️⃣2️⃣ LABEL - Metadata
+
+```dockerfile
+# Add metadata to image
+LABEL maintainer="your.email@example.com"
+LABEL version="1.0"
+LABEL description="My awesome application"
+
+# Multiple labels
+LABEL maintainer="admin@example.com" \
+      version="2.0" \
+      environment="production"
+```
+
+---
+
+## 🎯 Quick Command Reference
+
+### Image Commands
+```bash
+docker images                    # List all images
+docker pull <image>              # Download image
+docker build -t <name> .         # Build image from Dockerfile
+docker tag <image> <new-tag>     # Tag an image
+docker push <image>              # Push to registry
+docker rmi <image>               # Remove image
+docker history <image>           # View image layers
+docker inspect <image>           # Detailed image info
+docker image prune               # Remove dangling images
+```
+
+### Container Commands
+```bash
+docker run <image>               # Create and start container
+docker run -d <image>            # Run in background (detached)
+docker run -it <image> bash      # Run with interactive terminal
+docker run --name <name> <image> # Run with custom name
+docker ps                        # List running containers
+docker ps -a                     # List all containers
+docker stop <container>          # Stop container
+docker start <container>         # Start stopped container
+docker restart <container>       # Restart container
+docker rm <container>            # Remove container
+docker rm -f <container>         # Force remove running container
+docker exec -it <container> bash # Execute command in container
+docker logs <container>          # View container logs
+docker logs -f <container>       # Follow logs
+docker inspect <container>       # Detailed container info
+docker stats                     # Resource usage statistics
+docker top <container>           # Running processes
+docker container prune           # Remove stopped containers
+```
+
+### Build Commands
+```bash
+docker build -t myapp:v1 .                    # Build with tag
+docker build --no-cache -t myapp:v1 .        # Build without cache
+docker build --build-arg VERSION=2.0 .       # Build with arguments
+docker build -f Dockerfile.prod -t myapp .   # Specify Dockerfile
+```
+
+### System Commands
+```bash
+docker info                      # Docker system info
+docker version                   # Docker version
+docker system df                 # Disk usage
+docker system prune              # Remove unused data
+docker system prune -a           # Remove all unused data
+docker system prune --volumes    # Include volumes
+```
+
+---
+
+## 📚 Learning Tips & Best Practices
+
+### Study Strategy
+1. **Practice Daily**: Run commands hands-on
+2. **Build Projects**: Best way to learn
+3. **Read Error Messages**: They're helpful!
+4. **Use Official Docs**: https://docs.docker.com
+5. **Join Communities**: Forums, Stack Overflow, Reddit
+
+### Dockerfile Best Practices
+- Use specific base image tags (not `latest`)
+- Minimize layers by chaining commands
+- Order instructions from least to most frequently changing
+- Use `.dockerignore` to exclude files
+- Use multi-stage builds for smaller images
+- Run as non-root user
+- Keep images small (prefer Alpine)
+- Use COPY instead of ADD
+- Don't install unnecessary packages
+- Clean up in the same layer
+
+### Security Best Practices
+- Never run containers as root in production
+- Use official images from trusted sources
+- Scan images for vulnerabilities
+- Don't store secrets in images
+- Use secrets management (Docker secrets, env vars)
+- Limit container resources
+- Use read-only filesystems when possible
+- Keep base images updated
+
+### Performance Best Practices
+- Use layer caching effectively
+- Minimize image size
+- Use multi-stage builds
+- Don't run multiple processes in one container
+- Use volumes for persistent data
+- Set resource limits appropriately
+- Monitor container metrics
+
+---
+
+## 🔖 Quick Topic Finder
+
+**Need to find something fast? Use Ctrl+F (or Cmd+F) and search for:**
+
+### Concepts
+- "containerization" - What Docker does
+- "layers" - How images work
+- "lifecycle" - Container states
+- "registry" - Where images are stored
+
+### Commands
+- "docker run" - Start containers
+- "docker build" - Build images
+- "docker exec" - Run commands in container
+- "docker logs" - View output
+- "docker ps" - List containers
+- "docker images" - List images
+
+### Instructions
+- "FROM" - Base image
+- "RUN" - Execute commands
+- "CMD" - Default command
+- "COPY" - Copy files
+- "ENV" - Environment variables
+- "USER" - Switch user
+- "WORKDIR" - Set directory
+
+### Topics
+- "installation" - How to install
+- "security" - Best practices
+- "non-root" - User management
+- "restart policy" - Auto-restart
+- "resource limits" - CPU/Memory
+- "multi-stage" - Build optimization
+
+---
+
+## 📖 Next Learning Path
+
+**You've completed Phase 1 & 2! Next up:**
+
+### Phase 3: Advanced Concepts (Week 5-6)
+- Docker Networking
+- Docker Volumes & Data Management
+- Docker Compose
+- Multi-stage Builds Advanced
+- Docker Registry Management
+
+### Phase 4: Production & DevOps (Week 7-8)
+- Container Orchestration (Kubernetes basics)
+- CI/CD with Docker
+- Docker Security in Depth
+- Monitoring & Logging
+- Production Deployment Strategies
+- Troubleshooting
+
+---
+
+## 💡 Common Issues & Solutions
+
+### Issue: Permission Denied
+```bash
+# Problem: docker: Got permission denied
+# Solution: Add user to docker group
+sudo usermod -aG docker $USER
+# Then log out and log back in
+```
+
+### Issue: Port Already in Use
+```bash
+# Problem: Port is already allocated
+# Solution: Check what's using the port
+sudo lsof -i :80
+# Or use a different port
+docker run -p 8080:80 nginx
+```
+
+### Issue: Container Exits Immediately
+```bash
+# Problem: Container starts then stops
+# Solution: Check logs
+docker logs <container-name>
+# Common cause: No foreground process
+```
+
+### Issue: Cannot Remove Image
+```bash
+# Problem: Image is referenced by container
+# Solution: Remove container first
+docker rm -f $(docker ps -aq)
+# Then remove image
+docker rmi <image-name>
+```
+
+---
+
+## 🎓 Certification & Career Path
+
+### Certifications
+- Docker Certified Associate (DCA)
+- Kubernetes certifications (CKA, CKAD)
+- AWS/Azure/GCP container certifications
+
+### Job Roles
+- DevOps Engineer
+- Container Platform Engineer
+- Site Reliability Engineer (SRE)
+- Cloud Engineer
+- Software Engineer (with containerization skills)
+
+---
+
+**Last Updated:** January 2026  
+**Version:** 1.0 Complete  
+**Status:** Phase 1 & 2 Complete with all commands and examples
+
+---
+
+## 📞 Community Resources
+
+- **Official Docs**: https://docs.docker.com
+- **Docker Hub**: https://hub.docker.com
+- **Docker Forums**: https://forums.docker.com
+- **Stack Overflow**: Tag "docker"
+- **Reddit**: r/docker
+- **YouTube**: Docker official channel
+
+---
+
+*Happy Learning! 🐳*
